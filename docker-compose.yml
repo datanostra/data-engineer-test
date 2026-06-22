@@ -1,4 +1,15 @@
 services:
+  db:
+    image: postgres:16-alpine
+    container_name: foodvisor_postgres
+    environment:
+      POSTGRES_DB: foodvisor
+      POSTGRES_USER: foodvisor
+      POSTGRES_PASSWORD: foodvisor
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
   web:
     build: .
     container_name: foodvisor_ads
@@ -6,3 +17,5 @@ services:
       - .:/app
     ports:
       - "8000:8000"
+volumes:
+  postgres_data:
