@@ -21,6 +21,9 @@ class RawAdsRow(models.Model):
         related_name="rows",
     )
 
+    extraction_date = models.DateField()
+    attribution_window = models.CharField(max_length=10)
+
     date = models.DateField(
         help_text="Performance date."
     )
@@ -58,6 +61,27 @@ class RawAdsRow(models.Model):
     created_at = models.DateTimeField(
         auto_now_add=True
     )
+
+    country = models.CharField(max_length=2)
+    media = models.CharField(max_length=100)
+
+    campaign_name = models.TextField()
+    ad_name = models.TextField()
+    short_ad_name = models.TextField(blank=True, null=True)
+    ad_type = models.CharField(max_length=100, blank=True, null=True)
+    ad_creative_type = models.CharField(max_length=100, blank=True, null=True)
+
+    impressions = models.BigIntegerField()
+    clicks = models.BigIntegerField()
+    sales = models.BigIntegerField()
+
+    purchases_d0 = models.BigIntegerField()
+    purchases_d7 = models.BigIntegerField()
+
+    purchases_value_d0 = models.DecimalField(max_digits=18, decimal_places=6)
+    purchases_value_d7 = models.DecimalField(max_digits=18, decimal_places=6)
+
+    row_hash = models.CharField(max_length=64, blank=True, null=True)
 
     def __str__(self):
         return (

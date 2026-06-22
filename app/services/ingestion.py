@@ -1,5 +1,6 @@
 from pathlib import Path
 from datetime import datetime
+from app.services.curated import upsert_curated_rows
 import hashlib
 
 import pandas as pd
@@ -91,10 +92,31 @@ def ingest_file(file_path: str) -> dict:
                 ad_id=row["ad_id"],
                 spend=row["spend"],
                 installs=row["installs"],
+                country=row["country"],
+                media=row["media"],
+                campaign_name=row["campaign_name"],
+                ad_name=row["ad_name"],
+                short_ad_name=row["short_ad_name"],
+                ad_type=row["ad_type"],
+                ad_creative_type=row["ad_creative_type"],
+                impressions=row["impressions"],
+                clicks=row["clicks"],
+                sales=row["sales"],
+                purchases_d0=row["purchases (D0)"],
+                purchases_d7=row["purchases (D7)"],
+                purchases_value_d0=row["purchases_value (D0)"],
+                purchases_value_d7=row["purchases_value (D7)"],
+                extraction_date=extraction_date,
+                attribution_window=attribution_window,
             )
         )
 
     RawAdsRow.objects.bulk_create(raw_rows)
+
+    curated_count = upsert_curated_rows(
+        raw_rows=raw_rows,
+        attribution_window=attribution_window,
+    )
 
     return {
         "status": "ingested",
@@ -102,6 +124,7 @@ def ingest_file(file_path: str) -> dict:
         "row_count": len(raw_rows),
         "extraction_date": extraction_date,
         "attribution_window": attribution_window,
+        "curated_count": curated_count,
     }
 
 
