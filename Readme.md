@@ -25,12 +25,14 @@ foodvisor-data-engineer-test/
 ├── data/
 |   ├── source/         # Input CSV files provided with the challenge
 ├── app/
+|   ├── api/            # Rest framework
 |   ├── models/         # Django ORM 
 |   ├── services/       # Core business logic
-|   ├── api/            # Rest framework
+|   ├── dashboard/      # Serve the User Interface
 |   ├── management/
 |   |   ├── commands/   # Python instructions to launch sepcific operations
 ├── foodvisor_ads/      # Django configuration
+├── templates/          # Html templates
 ```
 
 ## Development Setup
