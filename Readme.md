@@ -11,6 +11,22 @@ The objective is to:
 - Maintain curated datasets containing the latest known values.
 - Expose aggregated KPIs through a REST API.
 - Demonstrate a production-oriented architecture suitable for AWS deployment.
+- Bonus: develop a simple user interface that consumes the API
+
+## Assumptions
+
+The following assumptions were made during implementation:
+
+- CSV files are immutable once delivered.
+- Attribution windows (`day0`, `day7`, `day30`) represent independent snapshots of campaign performance.
+- A business key is defined by:
+  - date
+  - platform
+  - country_x_language
+  - campaign_id
+  - ad_id
+- The curated layer must always expose the latest known state for a business key.
+- Reprocessing older files must never overwrite more recent data.
 
 ## Tech Stack
 - Python
@@ -35,50 +51,139 @@ foodvisor-data-engineer-test/
 ├── templates/          # Html templates
 ```
 
-## Development Setup
+## Running with Docker Compose
 
-Create Virtual Environment
-```
-python -m venv .venv
-```
+Start the full local environment:
 
-Activate Environment (Windows)
-```
-.venv\Scripts\activate
+```bash
+docker compose up --build
 ```
 
-Install Dependencies
-```
-pip install -r requirements.txt
+This starts:
+
+* PostgreSQL database
+* Django application server
+* Database migrations are applied automatically at startup
+
+The application is available at:
+
+```text
+http://localhost:8000
 ```
 
-Run Migrations
-```
-python manage.py makemigrations
-python manage.py migrate
+---
+
+## Data Ingestion
+
+Once the containers are running, ingest all CSV files from the default data directory:
+
+```bash
+docker compose exec web python manage.py ingest_directory
 ```
 
-## Running the Project
-Reset All Ingested Data
-```
-python manage.py reset_data
-```
+By default, this command reads files from:
 
-Deletes all ingestion metadata and raw performance records.
-
-Ingest All Available Files
-```
-python manage.py ingest_directory
-```
-
-By default, files are loaded from:
-
+```text
 ../data/source
+```
 
-Ingest a Single File
+To reset all ingested and curated data:
+
+```bash
+docker compose exec web python manage.py reset_data
 ```
-python manage.py ingest_file ../data/source/2022-06-01_day0_anon.csv
+
+To ingest a single file:
+
+```bash
+docker compose exec web python manage.py ingest_file ../data/source/2022-06-01_day0_anon.csv
 ```
+
+The ingestion process is idempotent. Re-ingesting the same file will not duplicate raw or curated records.
+
+---
+
+## API Examples
+
+Campaign-level KPIs:
+
+```text
+http://localhost:8000/api/campaigns
+```
+
+Campaign-level KPIs for the `day7` attribution window:
+
+```text
+http://localhost:8000/api/campaigns?attribution_window=day7
+```
+
+Ad-level KPIs:
+
+```text
+http://localhost:8000/api/ads
+```
+
+Ad-level KPIs for a specific attribution window:
+
+```text
+http://localhost:8000/api/ads?attribution_window=day30
+```
+
+Filter by date range:
+
+```text
+http://localhost:8000/api/campaigns?date_from=2022-06-01&date_to=2022-06-03
+```
+
+Filter by platform:
+
+```text
+http://localhost:8000/api/campaigns?attribution_window=day7&platform=iOS
+```
+
+Filter by country:
+
+```text
+http://localhost:8000/api/campaigns?attribution_window=day7&country=FR
+```
+
+Combined filters:
+
+```text
+http://localhost:8000/api/ads?attribution_window=day7&date_from=2022-06-01&date_to=2022-06-03&platform=iOS&country=FR
+```
+
+Supported query parameters:
+
+* `date_from`
+* `date_to`
+* `attribution_window`
+* `platform`
+* `country`
+* `country_x_language`
+* `campaign_name`
+* `ad_name`
+
+---
+
+## Dashboard Interface
+
+A lightweight dashboard is available at:
+
+```text
+http://localhost:8000/dashboard/
+```
+
+The dashboard allows users to:
+
+* select campaign or ad-level views
+* choose the attribution window
+* filter by date range
+* filter by platform, country, campaign, and ad
+* inspect aggregated KPIs in a table
+
+![User Interface](docs/dashboard.png)
+
 
 ## Idempotency
 
@@ -98,6 +203,14 @@ Stores ingestion metadata and lineage information.
 Stores the original AppLovin performance records exactly as received from the source files.
 
 This layer is append-only and serves as the system of record for all ingested data.
+
+## Latest State Resolution
+
+Multiple files may contain information about the same campaign or ad across different extraction dates.
+
+When a record already exists in the curated layer, it is only updated if the incoming extraction date is more recent than the stored version.
+
+This guarantees that the curated layer always exposes the latest known state regardless of ingestion order.
 
 ## Limitations
 
@@ -129,7 +242,7 @@ WHERE excluded.last_extraction_date >= target.last_extraction_date;
 ```
 This approach provides both correctness and high performance by executing updates in bulk while preserving the latest-state guarantee. I would implement it if i had time, but I prefere to stay in the context of ORM for this test.
 
-### Improvements
+### Future Enhancements
 
 Current limitation: 
 - Curated upsert is implemented row by row for clarity. For production-scale ingestion, this should be replaced by a bulk upsert strategy using PostgreSQL ON CONFLICT or a staging table.
@@ -212,7 +325,7 @@ The API is intended for:
 * external consumers requiring programmatic access
 
 Keeping the API layer allows the platform to satisfy operational use cases independently from analytical workloads.
-Django REST API is shosted on ECS Fargate.
+Django REST API is hosted on ECS Fargate.
 
 The Django REST API is maintained to satisfy operational and programmatic access requirements defined in the exercise. In a production environment focused exclusively on business intelligence and reporting, Amazon QuickSight could consume curated datasets directly through Redshift, reducing the need for a dedicated API layer.
 
