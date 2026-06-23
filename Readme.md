@@ -102,6 +102,137 @@ This layer is append-only and serves as the system of record for all ingested da
 Current limitation: 
 - Curated upsert is implemented row by row for clarity. For production-scale ingestion, this should be replaced by a bulk upsert strategy using PostgreSQL ON CONFLICT or a staging table.
 
+## Target AWS Architecture
+
+### Overview
+
+The proposed architecture combines scheduled and event-driven ingestion patterns to support both automated AppLovin extractions and manual backfill operations.
+
+Raw files are stored in Amazon S3 to ensure auditability, replayability, and long-term historical retention. Curated datasets are maintained in PostgreSQL and exposed through a Django REST API for operational consumption.
+
+Analytical workloads are separated from application workloads through a dedicated analytics layer based on Amazon Redshift and Amazon QuickSight.
+
+![AWS Architecture](docs/aws-pipeline-foodvisor.png)
+
+### EventBridge Scheduler
+
+Amazon EventBridge Scheduler triggers periodic extraction jobs according to the required attribution windows (day0, day7, day30).
+
+This mechanism automates data collection from the AppLovin API and removes the need for manual execution.
+
+---
+
+### ECS Fargate Extraction Tasks
+
+Extraction jobs are executed as ECS Fargate tasks.
+
+Using Fargate allows the ingestion logic to reuse the existing Django management commands without managing servers or EC2 instances.
+
+---
+
+### Amazon S3 Raw Storage
+
+Raw CSV files are stored in an immutable S3 bucket.
+
+This storage layer provides:
+
+* historical retention
+* replayability
+* auditability
+* recovery from ingestion failures
+* support for future backfills
+
+---
+
+### Event-Driven Ingestion
+
+Whenever a new file is uploaded to the raw S3 bucket, an S3 Event Notification is emitted. The notification is routed through EventBridge, which launches an ECS Fargate ingestion task. This event-driven architecture decouples file production from file processing and naturally supports manual uploads and future data sources.
+
+---
+
+### Aurora PostgreSQL
+
+Aurora PostgreSQL stores operational datasets used by the application.
+
+Two types of information are maintained:
+* ingestion metadata
+* curated marketing datasets
+
+Aurora serves as the operational data store powering the API layer.
+
+---
+
+### Django REST API
+
+The Django API exposes campaign-level and ad-level KPIs through HTTP endpoints.
+
+The API is intended for:
+
+* internal applications
+* operational reporting
+* lightweight integrations
+* external consumers requiring programmatic access
+
+Keeping the API layer allows the platform to satisfy operational use cases independently from analytical workloads.
+Django REST API is shosted on ECS Fargate.
+
+The Django REST API is maintained to satisfy operational and programmatic access requirements defined in the exercise. In a production environment focused exclusively on business intelligence and reporting, Amazon QuickSight could consume curated datasets directly through Redshift, reducing the need for a dedicated API layer.
+
+However, the API remains valuable for integrations, internal tools, automation workflows, and external consumers requiring machine-to-machine access.
+
+---
+
+### Redshift Serverless
+
+Amazon Redshift Serverless acts as the analytical warehouse.
+
+Curated operational datasets can be replicated into Redshift to support:
+
+* large aggregations
+* historical analysis
+* marketing reporting
+* self-service analytics
+
+This separation prevents analytical workloads from impacting operational API performance.
+
+---
+
+### Amazon QuickSight
+
+Amazon QuickSight provides business intelligence dashboards for marketing stakeholders.
+
+QuickSight connects directly to Redshift and enables:
+
+* KPI monitoring
+* campaign performance analysis
+* marketing reporting
+* executive dashboards
+
+Business users interact with QuickSight rather than querying operational systems directly.
+
+---
+
+### Monitoring
+
+CloudWatch collects logs and metrics from both ingestion tasks and API services.
+
+This enables centralized monitoring, troubleshooting, and alerting.
+
+---
+
+### Architectural Principles
+
+The architecture follows several key principles:
+
+* Raw and curated layers are clearly separated.
+* Ingestion is event-driven whenever possible.
+* Operational and analytical workloads are isolated.
+* Raw data remains replayable at all times.
+* Business users consume dashboards through QuickSight.
+* Applications consume data through the REST API.
+* Infrastructure remains serverless or fully managed whenever possible.
+
+
 # Author
 
 Guillaume Blot
