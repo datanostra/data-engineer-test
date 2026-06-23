@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <title>Foodvisor Ads Dashboard</title>
+        <style>
+        :root {
+            --color-primary: #00B894;
+            --color-primary-dark: #009B7A;
+            --color-background: #F7FAF8;
+            --color-surface: #FFFFFF;
+            --color-border: #E4EAE7;
+            --color-text: #1F2933;
+            --color-muted: #6B7280;
+        }
+
+        body {
+            font-family: Inter, Arial, sans-serif;
+            margin: 0;
+            padding: 32px;
+            background: var(--color-background);
+            color: var(--color-text);
+        }
+
+        h1 {
+            color: var(--color-primary-dark);
+            margin-bottom: 8px;
+        }
+
+        p {
+            color: var(--color-muted);
+        }
+
+        .filters {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 16px;
+            padding: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 14px;
+            margin: 24px 0;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04);
+        }
+
+        label {
+            display: flex;
+            flex-direction: column;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--color-muted);
+        }
+
+        input,
+        select {
+            border: 1px solid var(--color-border);
+            border-radius: 10px;
+            padding: 8px 10px;
+            min-width: 150px;
+            margin-top: 4px;
+        }
+
+        button {
+            background: var(--color-primary);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            padding: 10px 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: var(--color-primary-dark);
+        }
+
+        .summary {
+            margin-top: 16px;
+            font-weight: 600;
+            color: var(--color-primary-dark);
+        }
+
+        table {
+            background: var(--color-surface);
+            border-collapse: collapse;
+            width: 100%;
+            margin-top: 24px;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04);
+        }
+
+        th {
+            background: #EAF8F3;
+            color: var(--color-primary-dark);
+            text-align: left;
+        }
+
+        th,
+        td {
+            padding: 10px;
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        tr:hover {
+            background: #FAFCFB;
+        }
+    </style>
+</head>
+<body>
+    <h1>Foodvisor Ads Dashboard</h1>
+    <p>Explore campaign and ad-level KPIs from curated AppLovin data.</p>
+
+    <div class="filters">
+        <label>
+            View
+            <select id="view">
+                <option value="campaigns">Campaigns</option>
+                <option value="ads">Ads</option>
+            </select>
+        </label>
+
+        <label>
+            Attribution Window
+            <select id="attribution_window">
+                <option value="day0">day0</option>
+                <option value="day7" selected>day7</option>
+                <option value="day30">day30</option>
+            </select>
+        </label>
+
+        <label>
+            Date from
+            <input id="date_from" type="date">
+        </label>
+
+        <label>
+            Date to
+            <input id="date_to" type="date">
+        </label>
+
+        <label>
+            Platform
+            <select id="platform">
+                <option value="">All</option>
+                <option value="iOS">iOS</option>
+                <option value="Android">Android</option>
+            </select>
+        </label>
+
+        <label>
+            Country
+            <input id="country" placeholder="FR">
+        </label>
+
+        <label>
+            Country x Language
+            <input id="country_x_language" placeholder="FR-fr">
+        </label>
+
+        <label>
+            Campaign name
+            <input id="campaign_name" placeholder="Campaign">
+        </label>
+
+        <label>
+            Ad name
+            <input id="ad_name" placeholder="Ad">
+        </label>
+
+        <label>
+            &nbsp;
+            <button onclick="loadData()">Load data</button>
+        </label>
+    </div>
+
+    <div class="summary" id="summary"></div>
+
+    <table>
+        <thead id="table-head"></thead>
+        <tbody id="table-body"></tbody>
+    </table>
+
+    <script>
+        function buildQueryParams() {
+            const fields = [
+                "attribution_window",
+                "date_from",
+                "date_to",
+                "platform",
+                "country",
+                "country_x_language",
+                "campaign_name",
+                "ad_name"
+            ];
+
+            const params = new URLSearchParams();
+
+            fields.forEach(field => {
+                const value = document.getElementById(field).value;
+                if (value) {
+                    params.append(field, value);
+                }
+            });
+
+            return params.toString();
+        }
+
+        function formatNumber(value) {
+            if (value === null || value === undefined) return "";
+            return Number(value).toFixed(2);
+        }
+
+        function renderTable(data, view) {
+            const head = document.getElementById("table-head");
+            const body = document.getElementById("table-body");
+            const summary = document.getElementById("summary");
+
+            body.innerHTML = "";
+            head.innerHTML = "";
+
+            const columns = view === "campaigns"
+                ? ["campaign_name", "spend", "installs", "purchases_d0", "purchases_d7", "purchases_value_d7", "cpi", "cpa_d7", "roas_d7"]
+                : ["campaign_name", "ad_name", "spend", "installs", "purchases_d0", "purchases_d7", "purchases_value_d7", "cpi", "cpa_d7", "roas_d7"];
+
+            head.innerHTML = `
+                <tr>
+                    ${columns.map(col => `<th>${col}</th>`).join("")}
+                </tr>
+            `;
+
+            data.forEach(row => {
+                const tr = document.createElement("tr");
+
+                tr.innerHTML = columns.map(col => {
+                    const value = typeof row[col] === "number"
+                        ? formatNumber(row[col])
+                        : row[col] ?? "";
+
+                    return `<td>${value}</td>`;
+                }).join("");
+
+                body.appendChild(tr);
+            });
+
+            summary.textContent = `${data.length} rows returned`;
+        }
+
+        async function loadData() {
+            const view = document.getElementById("view").value;
+            const query = buildQueryParams();
+            const url = `/api/${view}?${query}`;
+
+            const response = await fetch(url);
+            const data = await response.json();
+
+            renderTable(data, view);
+        }
+
+        loadData();
+    </script>
+</body>
+</html>
