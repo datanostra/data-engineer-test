@@ -15,7 +15,27 @@ def get_curated_model(attribution_window: str):
 
 def upsert_curated_rows(raw_rows, attribution_window: str) -> int:
     model = get_curated_model(attribution_window)
+
+    latest_by_key = {}
+
+    for raw_row in raw_rows:
+        key = (
+            raw_row.date,
+            raw_row.platform,
+            raw_row.country_x_language,
+            raw_row.campaign_id,
+            raw_row.ad_id,
+        )
+
+        current = latest_by_key.get(key)
+
+        if current is None or raw_row.extraction_date >= current.extraction_date:
+            latest_by_key[key] = raw_row
+
+    raw_rows = list(latest_by_key.values())
+
     changed_count = 0
+
 
     for raw_row in raw_rows:
         obj, created = model.objects.update_or_create(

@@ -83,6 +83,13 @@ class RawAdsRow(models.Model):
 
     row_hash = models.CharField(max_length=64, blank=True, null=True)
 
+    class Meta:
+        indexes = [
+            models.Index(fields=["attribution_window", "extraction_date"]),
+            models.Index(fields=["date", "platform"]),
+            models.Index(fields=["campaign_id", "ad_id"]),
+        ]
+
     def __str__(self):
         return (
             f"{self.date} | "

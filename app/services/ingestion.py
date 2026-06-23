@@ -2,6 +2,7 @@ from pathlib import Path
 from datetime import datetime
 from app.services.curated import upsert_curated_rows
 import hashlib
+import time
 
 import pandas as pd
 from django.db import transaction
@@ -48,6 +49,7 @@ def ingest_file(file_path: str) -> dict:
     Idempotency:
     if the exact same file content was already ingested, the ingestion is skipped.
     """
+
     file_path = Path(file_path)
 
     if not file_path.exists():
@@ -111,12 +113,16 @@ def ingest_file(file_path: str) -> dict:
             )
         )
 
+    start = time.time()
     RawAdsRow.objects.bulk_create(raw_rows)
+    print(f"    RAW bulk insert completed in {time.time() - start:.2f}s")
 
+    start = time.time()
     curated_count = upsert_curated_rows(
         raw_rows=raw_rows,
         attribution_window=attribution_window,
     )
+    print(f"    CURATED upsert completed in {time.time() - start:.2f}s")
 
     return {
         "status": "ingested",
@@ -140,6 +146,7 @@ def ingest_directory(directory_path: str) -> dict:
     results = []
 
     for file_path in sorted(directory_path.glob("*.csv")):
+        print(f"Start ingestion from {file_path}")
         result = ingest_file(str(file_path))
         results.append(result)
 

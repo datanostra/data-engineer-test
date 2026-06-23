@@ -99,8 +99,44 @@ This layer is append-only and serves as the system of record for all ingested da
 
 ## Limitations
 
+### Curated Upsert Strategy
+
+The current implementation relies on Django ORM row-by-row upserts.For each business key (`date`, `platform`, `country_x_language`, `campaign_id`, `ad_id`), the pipeline verifies whether a curated record already exists and only updates it when the incoming extraction is more recent than the stored version.
+
+This approach was intentionally chosen because it guarantees correctness regardless of ingestion order. For example, if an older extraction is ingested after a newer one, the pipeline preserves the latest known state.
+
+The main drawback of this implementation is performance. Row-by-row upserts generate a large number of database queries and become increasingly expensive as data volumes grow.
+
+Several optimization options were considered:
+
+#### Bulk Upserts with Django ORM
+
+Django provides support for bulk upserts through `bulk_create(update_conflicts=True)`.
+
+This approach significantly improves ingestion performance by reducing the number of database round-trips. However, it cannot easily express the business rule requiring updates only when the incoming `last_extraction_date` is more recent than the existing one. As a result, an older extraction could potentially overwrite a newer version if files are ingested out of order.
+
+#### PostgreSQL Native Upserts
+
+A production-grade implementation would leverage PostgreSQL native upserts:
+
+```sql
+INSERT ...
+ON CONFLICT (...)
+DO UPDATE
+WHERE excluded.last_extraction_date >= target.last_extraction_date;
+```
+This approach provides both correctness and high performance by executing updates in bulk while preserving the latest-state guarantee. I would implement it if i had time, but I prefere to stay in the context of ORM for this test.
+
+### Improvements
+
 Current limitation: 
 - Curated upsert is implemented row by row for clarity. For production-scale ingestion, this should be replaced by a bulk upsert strategy using PostgreSQL ON CONFLICT or a staging table.
+- The curated layer only stores the latest state for a given business key. Historical versions are preserved in the raw layer through extraction snapshots, but the curated layer does not currently expose a ready-to-use history layer.
+- The API currently returns all matching records in a single response. Pagination should be introduced for larger datasets to improve scalability and response times.
+- Authentication and authorization are intentionally omitted for simplicity. A production deployment should protect endpoints using IAM, API Gateway, OAuth2, JWT, or another appropriate authentication mechanism.
+- Basic indexing has been implemented for the most common filtering dimensions. Additional optimization may be required as data volumes grow, including partitioning, clustering, or dedicated analytical storage structures.
+- The pipeline performs basic validation but does not currently implement advanced data quality monitoring. Future enhancements could include: Schema validation, Volume anomaly detection, KPI consistency validation, Automated alerting
+- Testing coverage is currently limited; a production-ready implementation should include comprehensive unit, integration, API, and regression tests to validate ingestion, idempotency, attribution routing, curated upserts, and end-to-end data consistency.
 
 ## Target AWS Architecture
 
